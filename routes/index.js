@@ -1,15 +1,22 @@
-//npm modules
+
 const express = require('express');
+const router = express.Router();
 const uuid = require('uuid/v4');
 const session = require('express-session');
 const FileStore = require('session-file-store')(session);
 const bodyParser = require('body-parser');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
+const bcrypt = require('bcrypt');
 
+
+
+const saltRounds = 10;
 const users = [
     { id: '2f24vvg', email: 'test@test.com', password: 'password' }
 ];
+
+const hash = bcrypt.hashSync(users[0].password, saltRounds);
 
 // configure passport.js to use the local strategy
 passport.use(new LocalStrategy(
@@ -23,7 +30,7 @@ passport.use(new LocalStrategy(
         if(foundUsers.length === 0) {
             return done('Error. Email not found!');
         } else {
-            if(foundUsers[0].password === password) {
+            if(bcrypt.compareSync(password, hash)) {
                 // success
                 console.log('Local strategy returned true');
                 return done(null, foundUsers[0]);
@@ -47,13 +54,10 @@ passport.deserializeUser((id, done) => {
     done(null, user);
 });
 
-// create the server
-const app = express();
-
 // add & configure middleware
-app.use(bodyParser.urlencoded({ extended: false })); // Form data
-app.use(bodyParser.json()); // JSON
-app.use(session({
+router.use(bodyParser.urlencoded({ extended: false })); // Form data
+router.use(bodyParser.json()); // JSON
+router.use(session({
     genid: (req) => {
         console.log('Inside the session middleware');
         console.log(req.sessionID);
@@ -65,24 +69,25 @@ app.use(session({
     saveUninitialized: true,
     cookie: { maxAge: 10*60*1000 }
 }));
-app.use(passport.initialize());
-app.use(passport.session());
+router.use(passport.initialize());
+router.use(passport.session());
+
 
 // create the homepage route at '/'
-app.get('/', (req, res) => {
-    console.log('Inside the homepage callback function');
-    console.log(req.sessionID);
-    res.send(`you just hit the home page\n`);
-});
+// router.get('/', (req, res) => {
+//     console.log('Inside the homepage callback function');
+//     console.log(req.sessionID);
+//     res.send(`you just hit the home page\n`);
+// });
 
 // create the login get and post routes
-app.get('/login', (req, res) => {
+router.get('/login', (req, res) => {
     console.log('Inside GET /login callback function');
     console.log(req.sessionID);
     res.send(`You got the login page!\n`);
 });
 
-app.post('/login', (req, res, next) => {
+router.post('/login', (req, res, next) => {
     console.log('Inside POST /login callback function');
     // console.log(req.body);
     // res.send(`You posted to the login page!\n`)
@@ -96,17 +101,18 @@ app.post('/login', (req, res, next) => {
         console.log(`req.user: ${JSON.stringify(req.user)}`);
         req.login(user, (err) => {
             if (err) {
-                return res.send('req.login error', err);
+                return res.send(500, err);
             }
             console.log('Inside req.login() callback');
             console.log(`req.session.passport: ${JSON.stringify(req.session.passport)}`);
             console.log(`req.user: ${JSON.stringify(req.user)}`);
-            return res.send('You were authenticated & logged in!\n');
+            // return res.send('You were authenticated & logged in!\n');
+            res.redirect('/test');
         })
     })(req, res, next);
 });
 
-app.get('/authrequired', (req, res) => {
+router.get('/authrequired', (req, res) => {
     console.log('Inside GET /authrequired callback');
     console.log(`User authenticated? ${req.isAuthenticated()}`);
     if(req.isAuthenticated()) {
@@ -116,7 +122,28 @@ app.get('/authrequired', (req, res) => {
     }
 });
 
-// tell the server what port to listen on
-app.listen(3000, () => {
-    console.log('Listening on localhost:3000')
+router.get('/', function(req, res) {
+    console.log(222222);
+  res.render('index');
 });
+
+router.get('/test', function(req, res) {
+    console.log(333333, req);
+    res.render('test');
+});
+
+
+router.get('/user/new', function(req, res) {
+res.render('sign_up');
+});
+
+
+router.post('/user/create', function(req, res) {
+    users.push({"email": req.param('email'), "password": bcrypt.hashSync(req.param('password'), saltRounds)});
+    console.log(111111, users);
+    res.redirect('/');
+});
+
+
+
+module.exports = router;
